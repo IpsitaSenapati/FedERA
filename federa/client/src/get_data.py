@@ -3,7 +3,7 @@ from torchvision import transforms,datasets
 from torch.utils import data
 import numpy as np
 from PIL import Image
-
+import torch
 # Define a function to get the train and test datasets based on the given configuration
 def get_data(config):
     # If the dataset is not custom, create a dataset folder
@@ -43,6 +43,20 @@ def get_data(config):
         # Load the custom dataset
         trainset = customDataset(root='client_custom_dataset/CUSTOM/train', transform=apply_transform)
         testset = customDataset(root='client_custom_dataset/CUSTOM/test', transform=apply_transform)
+    
+    elif config['dataset']== 'Sentiment140':
+        import gdown
+        file_id = '1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx'
+        url1 = f'https://drive.google.com/file/d/1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx/view?usp=drive_link'
+        output = 'Sentiment_train.npy'
+        gdown.download(url1, output, quiet=False)
+        file_id = '16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ'
+        url2 = f'https://drive.google.com/file/d/16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ/view?usp=sharing'
+        output = 'Sentiment_test.npy'
+        gdown.download(url2, output, quiet=False)
+        trainset = np.load(r"C:\Users\HP\FedERA\federa\Sentiment_train.npy", allow_pickle=True).item()
+        testset = np.load(r"C:\Users\HP\FedERA\federa\Sentiment_test.npy", allow_pickle=True).item()
+    
     else:
         # Raise an error if an unsupported dataset is specified
         raise ValueError(f"Unsupported dataset type: {config['dataset']}")

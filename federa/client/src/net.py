@@ -1,6 +1,6 @@
 from torch import nn
 from torchvision import models
-
+from .client import get_data
 class LeNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=10):
         super().__init__()
@@ -28,6 +28,33 @@ class LeNet(nn.Module):
         x = self.relu(x)
         x = self.fc3(x)
         x = self.logSoftmax(x)
+        return x
+
+class ComplexNN(nn.Module):
+    def __init__(self, input_dim=300):
+        super(ComplexNN, self).__init__()
+        self.fc1 = nn.Linear(input_dim, 256)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(256, 128)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(128, 64)
+        self.relu3 = nn.ReLU()
+        self.fc4 = nn.Linear(64, 32)
+        self.relu4 = nn.ReLU()
+        self.fc5 = nn.Linear(32, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = self.relu3(x)
+        x = self.fc4(x)
+        x = self.relu4(x)
+        x = self.fc5(x)
+        x = self.sigmoid(x)
         return x
 
 def get_net(config):
@@ -58,4 +85,7 @@ def get_net(config):
             net = models.alexnet(num_classes=10)
         else:
             net = models.alexnet(num_classes=100)
+    if config['net'] == 'ComplexNN':
+        if config['dataset'] == 'Sentiment140':
+            net = ComplexNN(input_dim=300)
     return net

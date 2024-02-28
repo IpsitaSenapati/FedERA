@@ -54,6 +54,21 @@ def get_data(config):
         apply_transform = transforms.Compose([transforms.Resize(config['resize_size']), transforms.ToTensor()])
         testset = customDataset(root='./server_custom_dataset/CUSTOM/test', transform=apply_transform)
         trainset = customDataset(root='./server_custom_dataset/CUSTOM/train', transform=apply_transform)
+    
+    if config['dataset']== 'Sentiment140':
+        
+        import gdown
+        import numpy as np
+        file_id_train = '1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx'
+        url_train = f'https://drive.google.com/uc?id={file_id_train}' 
+        output_train = dataset_path + '/Sentiment_train.npy'
+        output_test = dataset_path + '/Sentiment_test.npy'
+        gdown.download(url_train, output_train, quiet=False)
+        file_id_test = '16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ'
+        url_test = f'https://drive.google.com/uc?id={file_id_test}' 
+        gdown.download(url_test, output_test, quiet=False)
+        trainset = np.load(output_train, allow_pickle=True).item()
+        testset = np.load(output_test, allow_pickle=True).item()
 
     return testset, trainset
 
@@ -99,8 +114,6 @@ def sample_return(root):
         newdataset.append(item)
     return newdataset
 
-
-
 class LeNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=10):
         super().__init__()
@@ -128,6 +141,33 @@ class LeNet(nn.Module):
         x = self.relu(x)
         x = self.fc3(x)
         x = self.logSoftmax(x)
+        return x
+    
+class ComplexNN(nn.Module):
+    def __init__(self, input_dim=300):
+        super(ComplexNN, self).__init__()
+        self.fc1 = nn.Linear(input_dim, 256)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(256, 128)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(128, 64)
+        self.relu3 = nn.ReLU()
+        self.fc4 = nn.Linear(64, 32)
+        self.relu4 = nn.ReLU()
+        self.fc5 = nn.Linear(32, 1)
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.relu1(x)
+        x = self.fc2(x)
+        x = self.relu2(x)
+        x = self.fc3(x)
+        x = self.relu3(x)
+        x = self.fc4(x)
+        x = self.relu4(x)
+        x = self.fc5(x)
+        x = self.sigmoid(x)
         return x
 
 def get_net(config):
@@ -158,6 +198,10 @@ def get_net(config):
             net = models.alexnet(num_classes=10)
         else:
             net = models.alexnet(num_classes=100)
+    if config['net']== 'ComplexNN':
+        if config['dataset'] == 'Sentiment140':
+            net= ComplexNN(input_dim=300)
+        
     return net
 
 def train_model(net, trainloader):
@@ -171,6 +215,26 @@ def train_model(net, trainloader):
     loss = criterion(outputs, labels)
     loss.backward()
     optimizer.step()
+    return net
+
+def train_text(net, trainloader):
+    print(len(trainloader))
+    criterion = torch.nn.BCELoss()
+    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
+    net.train()
+    for batch_idx, (inputs, labels) in enumerate(trainloader):
+        inputs, labels = inputs.to(device), labels.to(device)
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs.squeeze(), labels)
+        loss.backward()
+        optimizer.step()
+    '''for inputs, labels in trainloader:
+        optimizer.zero_grad()
+        outputs = net(inputs)
+        loss = criterion(outputs, labels.view(-1, 1))
+        loss.backward()
+        optimizer.step()'''
     return net
 
 def test_model(net, testloader):
@@ -189,8 +253,32 @@ def test_model(net, testloader):
     accuracy = correct / total
     return loss, accuracy
 
+def test_text(net,testloader):
+    criterion = torch.nn.BCEWithLogitsLoss() 
+    correct, total, loss = 0, 0, 0.0
+    net.eval()
+    
+    
+    with torch.no_grad():
+        for inputs, labels in tqdm(testloader):
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = net(inputs)           
+            loss += criterion(outputs, labels).item()            
+            predicted_labels = (outputs >= 0.5).float()
+            total += labels.size(0)
+            correct += torch.sum(predicted_labels == labels).item()
+    loss /= len(testloader.dataset)
+    accuracy = correct / total
+    return loss, accuracy
+
 def save_intial_model(config):
     testloader, _ = load_data(config)
-    net = get_net(config)
-    net = train_model(net, testloader)
+    if config['net']=='ComplexNN':
+        trainloader=load_data(config)
+        net = get_net(config)
+        print("hello")
+        net=train_text(net,trainloader)
+    else:
+        net = train_model(net, testloader)
     torch.save(net.state_dict(), 'initial_model.pt')
+

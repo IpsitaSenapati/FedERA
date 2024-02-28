@@ -3,13 +3,9 @@ import time
 from copy import deepcopy
 from math import ceil
 from tqdm import tqdm
-
-
+import torch.optim as optim
+from torch.utils.data import DataLoader, TensorDataset
 import torch
-
-from torch.utils.data import DataLoader
-
-
 from .data_utils import distributionDataloader
 from .get_data import  get_data
 # DEVICE = torch.device("cuda:2" if torch.cuda.is_available() else "cpu")
@@ -23,11 +19,21 @@ def load_data(config):
         trainloader = DataLoader(datasets, batch_size= config['batch_size'], shuffle=True)
         testloader = DataLoader(testset, batch_size=config['batch_size'])
         num_examples = {"trainset": len(datasets), "testset": len(testset)}
+    #elif config['dataset'] == 'Sentiment140':
+        #X_train_sparse = torch.tensor(trainset['data'], dtype=torch.float32)
+        #y_train_tensor = torch.tensor(trainset['target'], dtype=torch.float32)
+        #X_test_sparse = torch.tensor(testset['data'], dtype=torch.float32)
+        #y_test_tensor = torch.tensor(testset['target'], dtype=torch.float32)
+        #train_dataset = TensorDataset(X_train_sparse, y_train_tensor)
+        #test_dataset= TensorDataset(X_test_sparse, y_test_tensor)
+        #trainloader = DataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
+        #testloader = DataLoader(test_dataset, batch_size=config['batch_size'])
+        #num_examples = {"trainset": len(train_dataset), "testset": len(test_dataset)}
     else:
         trainloader = DataLoader(trainset, batch_size= config['batch_size'], shuffle=True)
         testloader = DataLoader(testset, batch_size=config['batch_size'])
         num_examples = {"trainset": len(trainset), "testset": len(testset)}
-
+        print(num_examples)
     # Return data loaders and number of examples in train and test datasets
     return trainloader, testloader, num_examples
 
@@ -74,6 +80,22 @@ def train_model(net, trainloader, epochs, device, deadline=None):
     for param_net, param_x in zip(net.parameters(), x.parameters()):
         param_net.data = param_net.data - param_x.data
 
+    return net
+
+def train_senti(net,epochs,trainloader, device, deadline=None):
+    criterion = torch.nn.BCELoss()
+    optimizer = optim.Adam(net.parameters(), lr=0.001)
+    net.train()
+    for epoch in range(epochs):
+        for inputs, labels in trainloader:
+            optimizer.zero_grad()
+            outputs = net(inputs)
+            loss = criterion(outputs, labels.view(-1, 1))
+            loss.backward()
+            optimizer.step()
+
+        print(f'Epoch {epoch + 1}/{epochs}, Loss: {loss.item()}')
+    
     return net
 
 def train_fedavg(net, trainloader, epochs, device, deadline=None):
