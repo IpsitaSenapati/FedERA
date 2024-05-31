@@ -1,6 +1,6 @@
 from torch import nn
 from torchvision import models
-from .client import get_data
+import torch
 class LeNet(nn.Module):
     def __init__(self, in_channels=1, num_classes=10):
         super().__init__()
@@ -31,7 +31,7 @@ class LeNet(nn.Module):
         return x
 
 class ComplexNN(nn.Module):
-    def __init__(self, input_dim=300):
+    def __init__(self, input_dim):
         super(ComplexNN, self).__init__()
         self.fc1 = nn.Linear(input_dim, 256)
         self.relu1 = nn.ReLU()
@@ -56,7 +56,7 @@ class ComplexNN(nn.Module):
         x = self.fc5(x)
         x = self.sigmoid(x)
         return x
-
+    
 def get_net(config):
     if config["net"] == 'LeNet':
         if config['dataset'] in ['MNIST', 'FashionMNIST', 'CUSTOM']:
@@ -86,6 +86,5 @@ def get_net(config):
         else:
             net = models.alexnet(num_classes=100)
     if config['net'] == 'ComplexNN':
-        if config['dataset'] == 'Sentiment140':
-            net = ComplexNN(input_dim=300)
+        net=ComplexNN(input_dim=300)
     return net
