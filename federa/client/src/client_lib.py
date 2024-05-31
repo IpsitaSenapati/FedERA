@@ -7,7 +7,7 @@ from datetime import datetime
 from codecarbon import  OfflineEmissionsTracker
 from .net import get_net
 from .net_lib import test_model, load_data
-from .net_lib import train_model, train_fedavg, train_scaffold, train_mimelite, train_mime, train_feddyn, train_senti
+from .net_lib import train_model, train_fedavg, train_scaffold, train_mimelite, train_mime, train_feddyn
 from torch.utils.data import DataLoader
 from .get_data import get_data
 import matplotlib.pyplot as plt
@@ -84,10 +84,6 @@ def train(train_order_message, device):
         model, control_variate = train_mime(model, control_variate, control_variate2, trainloader, epochs, device, deadline)
     elif config_dict['algorithm'] == 'fedavg':
         model = train_fedavg(model, trainloader, epochs, device, deadline)
-    
-    #elif config_dict['algorithm'] == 'fedavg_senti':
-       # model = train_senti(model,epochs,trainloader, device)
-    
     elif config_dict['algorithm'] == 'feddyn':
         global prev_grads
         model, prev_grads = train_feddyn(model, trainloader, epochs, device, deadline, prev_grads)
