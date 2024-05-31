@@ -2,12 +2,13 @@ import torch
 import os
 from tqdm import tqdm
 from torchvision import transforms,datasets
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader,Dataset
 from torch import nn
 from torchvision import models
 from torch.utils import data
 import numpy as np
 from PIL import Image
+import gdown
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #serverlib and eval_lib should be on the same device
@@ -49,30 +50,36 @@ def get_data(config):
                                     train=False, download=True, transform=apply_transform)
         trainset = datasets.CIFAR100(root='./server_dataset/CIFAR100',
                                     train=True, download=True, transform=apply_transform)
-
+    if config['dataset'] == 'Sentiment140':
+        output_train = './client_dataset/Sentiment_train.npy'
+        output_test = './client_dataset/Sentiment_test.npy'
+        '''
+        To datasets used below are uploaded on google drive and can be accessed at:
+        Entire dataset:-
+        Trainset:https://drive.google.com/file/d/1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx/view?usp=drive_link
+        Testset:https://drive.google.com/file/d/16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ/view?usp=drive_link
+        Subset of the dataset:-
+        Trainset:https://drive.google.com/file/d/1g-zJMgQSCo72ZtvLlRVWoLKG99TNexPa/view?usp=drive_link
+        Testset:https://drive.google.com/file/d/1dvaE5FlDj8yjExdcWa1XhQA9CGrps-vK/view?usp=drive_link
+        '''
+        #Using a subset of the dataset
+        file_id_train = '1g-zJMgQSCo72ZtvLlRVWoLKG99TNexPa'
+        file_id_test = '1dvaE5FlDj8yjExdcWa1XhQA9CGrps-vK'
+        #to use the entire dataset, use the file_ids given below
+        #file_id_train = '1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx'
+        #file_id_test = '16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ'
+        gdown.download(url_train, output_train, quiet=False)
+        gdown.download(url_test, output_test, quiet=False)
+        url_train = f'https://drive.google.com/uc?id={file_id_train}'
+        url_test = f'https://drive.google.com/uc?id={file_id_test}'
+        trainset = Sentiment140Dataset(np.load(output_train, allow_pickle=True).item())
+        testset = Sentiment140Dataset(np.load(output_test, allow_pickle=True).item())
     if config['dataset'] == 'CUSTOM':
         apply_transform = transforms.Compose([transforms.Resize(config['resize_size']), transforms.ToTensor()])
         testset = customDataset(root='./server_custom_dataset/CUSTOM/test', transform=apply_transform)
         trainset = customDataset(root='./server_custom_dataset/CUSTOM/train', transform=apply_transform)
-    
-    if config['dataset']== 'Sentiment140':
-        
-        import gdown
-        import numpy as np
-        file_id_train = '1jrqDDV9Myoralnr2hEFAuzDvzkd2RIpx'
-        url_train = f'https://drive.google.com/uc?id={file_id_train}' 
-        output_train = dataset_path + '/Sentiment_train.npy'
-        output_test = dataset_path + '/Sentiment_test.npy'
-        gdown.download(url_train, output_train, quiet=False)
-        file_id_test = '16WT66icsbmGxQSjQK-BIZ0VSPf0bVBZZ'
-        url_test = f'https://drive.google.com/uc?id={file_id_test}' 
-        gdown.download(url_test, output_test, quiet=False)
-        trainset = np.load(output_train, allow_pickle=True).item()
-        testset = np.load(output_test, allow_pickle=True).item()
 
     return testset, trainset
-
-
 
 class customDataset(data.Dataset):
     def __init__(self, root, transform=None):
@@ -99,7 +106,25 @@ class customDataset(data.Dataset):
 
     def __len__(self):
         return len(self.samples)
+    
+class Sentiment140Dataset(Dataset):
+    def __init__(self, data, transform=None):
+        self.data = torch.tensor(data['data'], dtype=torch.float)
+        self.labels = torch.tensor(data['target'], dtype=torch.long)
+        self.transform = transform
 
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        text = self.data[idx]
+        label = self.labels[idx]
+
+        if self.transform:
+            text = self.transform(text)
+
+        return text, label
+    
 def sample_return(root):
     newdataset = []
     labels = {'Breast': 0, 'Chestxray':1, 'Oct': 2, 'Tissue': 3}
@@ -142,9 +167,9 @@ class LeNet(nn.Module):
         x = self.fc3(x)
         x = self.logSoftmax(x)
         return x
-    
+
 class ComplexNN(nn.Module):
-    def __init__(self, input_dim=300):
+    def __init__(self, input_dim):
         super(ComplexNN, self).__init__()
         self.fc1 = nn.Linear(input_dim, 256)
         self.relu1 = nn.ReLU()
@@ -169,7 +194,7 @@ class ComplexNN(nn.Module):
         x = self.fc5(x)
         x = self.sigmoid(x)
         return x
-
+    
 def get_net(config):
     if config["net"] == 'LeNet':
         if config['dataset'] in ['MNIST', 'FashionMNIST', 'CUSTOM']:
@@ -198,87 +223,63 @@ def get_net(config):
             net = models.alexnet(num_classes=10)
         else:
             net = models.alexnet(num_classes=100)
-    if config['net']== 'ComplexNN':
-        if config['dataset'] == 'Sentiment140':
-            net= ComplexNN(input_dim=300)
-        
+    if config['net'] == 'ComplexNN':
+        net=ComplexNN(input_dim=300)
     return net
 
 def train_model(net, trainloader):
-    criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
     net.train()
-    dataiter = iter(trainloader)
-    images, labels = next(dataiter)
-    outputs = net(images)
-    optimizer.zero_grad()
-    loss = criterion(outputs, labels)
-    loss.backward()
-    optimizer.step()
-    return net
-
-def train_text(net, trainloader):
-    print(len(trainloader))
-    criterion = torch.nn.BCELoss()
-    optimizer = torch.optim.Adam(net.parameters(), lr=0.001)
-    net.train()
-    for batch_idx, (inputs, labels) in enumerate(trainloader):
-        inputs, labels = inputs.to(device), labels.to(device)
+    for data in trainloader:
+        inputs, labels = data
+        if isinstance(net, ComplexNN):
+            criterion = torch.nn.BCELoss()
+            inputs = inputs.float() 
+            labels = labels.float().unsqueeze(1)
+        else:
+            criterion = torch.nn.CrossEntropyLoss()
+            inputs = inputs.float()  
+            labels = labels.long()
         optimizer.zero_grad()
         outputs = net(inputs)
-        loss = criterion(outputs.squeeze(), labels)
+        loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
-    '''for inputs, labels in trainloader:
-        optimizer.zero_grad()
-        outputs = net(inputs)
-        loss = criterion(outputs, labels.view(-1, 1))
-        loss.backward()
-        optimizer.step()'''
     return net
 
-def test_model(net, testloader):
-    criterion = torch.nn.CrossEntropyLoss()
+def test_model(net, testloader, device):
+    criterion = torch.nn.BCELoss() if isinstance(net, ComplexNN) else torch.nn.CrossEntropyLoss()
     correct, total, loss = 0, 0, 0.0
     net.eval()
     with torch.no_grad():
-        for images, labels in tqdm(testloader) :
-            images, labels = images.to(device), labels.to(device)
-            outputs = net(images)
-            loss += criterion(outputs, labels).item()
-            _, predicted = torch.max(outputs.data, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
-    loss /= len(testloader.dataset)
-    accuracy = correct / total
-    return loss, accuracy
-
-def test_text(net,testloader):
-    criterion = torch.nn.BCEWithLogitsLoss() 
-    correct, total, loss = 0, 0, 0.0
-    net.eval()
-    
-    
-    with torch.no_grad():
-        for inputs, labels in tqdm(testloader):
+        for data in tqdm(testloader):
+            inputs, labels = data
             inputs, labels = inputs.to(device), labels.to(device)
-            outputs = net(inputs)           
-            loss += criterion(outputs, labels).item()            
-            predicted_labels = (outputs >= 0.5).float()
+
+            if isinstance(net, ComplexNN):
+                inputs = inputs.float()  
+                labels = labels.float().unsqueeze(1)  
+            else:
+                inputs = inputs.float()  
+                labels = labels.long()  
+
+            outputs = net(inputs)
+            loss += criterion(outputs, labels).item()
+            if isinstance(net, ComplexNN):
+                predicted = (outputs >= 0.5).float()  # For binary classification
+                correct += (predicted == labels).sum().item()
+            else:
+                _, predicted = torch.max(outputs.data, 1)  # For multi-class classification
+                correct += (predicted == labels).sum().item()
+
             total += labels.size(0)
-            correct += torch.sum(predicted_labels == labels).item()
+
     loss /= len(testloader.dataset)
     accuracy = correct / total
     return loss, accuracy
 
 def save_intial_model(config):
     testloader, _ = load_data(config)
-    if config['net']=='ComplexNN':
-        trainloader=load_data(config)
-        net = get_net(config)
-        print("hello")
-        net=train_text(net,trainloader)
-    else:
-        net = train_model(net, testloader)
+    net = get_net(config)
+    net = train_model(net, testloader)
     torch.save(net.state_dict(), 'initial_model.pt')
-
