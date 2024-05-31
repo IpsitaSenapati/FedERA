@@ -12,15 +12,21 @@ def data_distribution(config, trainset, num_users):
     #Calculate the number of samples present per class
     trainset_list = list(range(len(trainset)))
     for i in trainset_list:
-        labels.append(trainset[i][1])
-    unique_labels = np.unique(np.array(labels))
+        if config['net']=='ComplexNN':
+            label = trainset[i][1].item()
+            labels.append(trainset[i][1])
+        else:
+            label = trainset[i][1]
+            labels.append(trainset[i][1])
+    #unique_labels = np.unique(np.array(labels))
+    labels = [int(label) for label in labels]
+    unique_labels = np.unique(labels)   
     label_index_list = {}
     for key in unique_labels:
         label_index_list[key] = []
     for index, label in enumerate(labels):
         label_index_list[label].append(index)
     num_classes = len(unique_labels)
-
     #Calculate the value of the probability distribution. For K=1, it will be iid distribution
     K = config['niid']
     if K==1:
